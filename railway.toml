@@ -1,0 +1,7 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "python weather_bot.py"
+# Railway Cron schedules use UTC. 19:30 UTC = 23:00 Asia/Tehran.
+cronSchedule = "30 19 * * 2,5"
