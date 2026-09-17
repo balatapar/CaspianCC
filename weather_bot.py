@@ -75,7 +75,7 @@ def load_config():
 
 
 def fetch_open_meteo(lat, lon, model, days=14):
-    """Fetch forecast from Open-Meteo for a specific model."""
+    """Fetch forecast from Open-Meteo for a specific model with retry logic."""
     # Open-Meteo now exposes ECMWF through its dedicated endpoint. The
     # generic /v1/forecast route can return null arrays for ecmwf_ifs04.
     if model == "ecmwf_ifs04":
@@ -97,14 +97,32 @@ def fetch_open_meteo(lat, lon, model, days=14):
     }
     if model != "ecmwf_ifs04":
         params["models"] = model
-    try:
-        resp = session.get(url, params=params, timeout=30)
-        resp.raise_for_status()
-        data = resp.json()
-        return data.get('daily', {})
-    except Exception as e:
-        logger.error(f"Error fetching {model}: {e}")
-        return {}
+    
+    # Retry logic for rate limits (429) with exponential backoff
+    max_retries = 3
+    base_delay = 10  # seconds
+    for attempt in range(max_retries):
+        try:
+            resp = session.get(url, params=params, timeout=30)
+            if resp.status_code == 429:
+                retry_after = int(resp.headers.get('Retry-After', base_delay * (2 ** attempt)))
+                logger.warning(f"Rate limited for {model}. Waiting {retry_after}s before retry {attempt + 1}/{max_retries}...")
+                time.sleep(retry_after)
+                continue
+            resp.raise_for_status()
+            data = resp.json()
+            return data.get('daily', {})
+        except requests.exceptions.HTTPError as e:
+            if resp.status_code == 429 and attempt < max_retries - 1:
+                continue
+            logger.error(f"Error fetching {model}: {e}")
+            return {}
+        except Exception as e:
+            logger.error(f"Error fetching {model}: {e}")
+            return {}
+    
+    logger.error(f"Failed to fetch {model} after {max_retries} retries")
+    return {}
 
 
 def format_forecast_data(daily_data, model_name, location_name, days=14):
