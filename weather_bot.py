@@ -17,6 +17,7 @@ import jdatetime
 from telegram.error import TelegramError
 import asyncio
 import logging
+import time
 
 # New Google GenAI SDK
 from google import genai
@@ -253,9 +254,9 @@ def main():
 
     logger.info(f"Fetching forecasts for {loc_name} ({lat}, {lon})...")
 
-    # Fetch all models
+    # Fetch all models (with delay to avoid Open-Meteo rate limits)
     forecast_texts = []
-    for m in models:
+    for idx, m in enumerate(models):
         model_key = m['open_meteo_model']
         model_name = m['name']
         logger.info(f"Fetching {model_name} ({model_key})...")
@@ -263,6 +264,8 @@ def main():
         text = format_forecast_data(daily, model_name, loc_name, days)
         forecast_texts.append(text)
         logger.info(f"  ✓ {model_name} done")
+        if idx < len(models) - 1:
+            time.sleep(3)  # Avoid Open-Meteo rate limits (429)
 
     # Analyze with Gemini
     logger.info("Analyzing with Gemini...")
