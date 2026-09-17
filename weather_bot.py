@@ -10,6 +10,12 @@ import os
 import sys
 import yaml
 import requests
+
+# Use a persistent session with a browser-like User-Agent to avoid Open-Meteo rate limits.
+session = requests.Session()
+session.headers.update({
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+})
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from telegram import Bot
@@ -92,7 +98,7 @@ def fetch_open_meteo(lat, lon, model, days=14):
     if model != "ecmwf_ifs04":
         params["models"] = model
     try:
-        resp = requests.get(url, params=params, timeout=30)
+        resp = session.get(url, params=params, timeout=30)
         resp.raise_for_status()
         data = resp.json()
         return data.get('daily', {})
@@ -265,7 +271,7 @@ def main():
         forecast_texts.append(text)
         logger.info(f"  ✓ {model_name} done")
         if idx < len(models) - 1:
-            time.sleep(3)  # Avoid Open-Meteo rate limits (429)
+            time.sleep(5)  # Avoid Open-Meteo rate limits (429)
 
     # Analyze with Gemini
     logger.info("Analyzing with Gemini...")
